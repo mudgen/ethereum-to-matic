@@ -1,0 +1,31 @@
+{
+  "name": "ethereum-to-matic",
+  "version": "1.0.0",
+  "description": "AToken from Ethereum to Matic",
+  "main": "buidler.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mudgen/ethereum-to-matic.git"
+  },
+  "author": "Nick Mudge",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mudgen/ethereum-to-matic/issues"
+  },
+  "homepage": "https://github.com/mudgen/ethereum-to-matic#readme",
+  "devDependencies": {
+    "@nomiclabs/buidler": "^1.4.5",
+    "@nomiclabs/buidler-ethers": "^2.0.0",
+    "@nomiclabs/buidler-waffle": "^2.1.0",
+    "chai": "^4.2.0",
+    "ethereum-waffle": "^3.1.0",
+    "ethers": "^5.0.11",
+    "standard": "^14.3.4"
+  }
+}
