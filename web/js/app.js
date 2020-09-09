@@ -116,7 +116,7 @@ async function startup () {
   const goerli = ethers.getDefaultProvider('goerli', { infura: '37b0df2bfa8d412580671665570d81dc' })
   goerliAToken = new ethers.Contract(goerliATokenAddress, abi, goerli)
   const mumbai = new ethers.providers.JsonRpcProvider('https://rpc-mumbai.matic.today')
-  mumbaiAToken = new ethers.Contract('0xa983b3d938eEDf79783CE88ed227A47b6861A3e9', abi, mumbai)
+  mumbaiAToken = new ethers.Contract('0x201Df88D8d79ACA0AA6360F02eb9dD8aefdB1dfb', abi, mumbai)
 
   goerliPosERC20PredicateContract = new ethers.Contract(posERC20Predicate, abi, goerli)
   goerliPOSRootChainManagerContract = new ethers.Contract(POSRootChainManager, abi, goerli)
