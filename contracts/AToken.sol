@@ -695,6 +695,8 @@ contract AToken is ERC20, ERC20Detailed {
     mapping (address => uint256) private redirectedBalances;
     mapping (address => address) private interestRedirectionAllowances;       
 
+    address childChainManager;
+
     modifier whenTransferAllowed(address _from, uint256 _amount) {
         require(isTransferAllowed(_from, _amount), "Transfer cannot be allowed.");
         _;
@@ -702,9 +704,10 @@ contract AToken is ERC20, ERC20Detailed {
 
     constructor(
         string memory _name,
-        string memory _symbol
+        string memory _symbol,
+        address _childChainManager
     ) public ERC20Detailed(_name, _symbol, 18) {       
-        
+        childChainManager = _childChainManager;
     }
 
     function mint() external {
@@ -738,6 +741,7 @@ contract AToken is ERC20, ERC20Detailed {
     function deposit(address user, bytes calldata depositData)
         external                
     {
+        require(msg.sender == childChainManager, "AToken: Only childChainManager can deposit");
         uint256 amount = abi.decode(depositData, (uint256));
         mint(user, amount);
     }

@@ -15,13 +15,14 @@ async function main () {
 
   // We get the contract to deploy
   const AToken = await ethers.getContractFactory('AToken')
-  const aToken = await AToken.deploy('AToken', 'AT')
+  const aToken = await AToken.deploy('AToken', 'AT', '0xb5505a6d998549090530911180f38aC5130101c6')
 
   await aToken.deployed()
 
   console.log('AToken deployed to:', aToken.address)
   // goerli 0x47195A03fC3Fc2881D084e8Dc03bD19BE8474E46
-  // mumbai 0xa983b3d938eEDf79783CE88ed227A47b6861A3e9
+  // mumbaiOld 0xa983b3d938eEDf79783CE88ed227A47b6861A3e9
+  // mumbaiNew 0x201Df88D8d79ACA0AA6360F02eb9dD8aefdB1dfb
   await aToken['mint()']()
 
   const accounts = await ethers.getSigners()
