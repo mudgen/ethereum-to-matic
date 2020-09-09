@@ -61,7 +61,7 @@ async function handleAccountsChanged (accounts) {
     opacity = 30
     // MetaMask is locked or the user has not connected any accounts
     console.log('Please connect to MetaMask.')
-  } else if (accounts[0] !== currentAccount) {
+  } else {
     currentChainId = window.ethereum.chainId
     opacity = 100
     currentAccount = accounts[0]
@@ -99,7 +99,10 @@ async function handleAccountsChanged (accounts) {
 function handleChainChanged (_chainId) {
   console.log('reloading chain id')
   // We recommend reloading the page, unless you must do otherwise
-  window.location.reload()
+  // startup()
+  currentChainId = window.ethereum.chainId
+  opacity = 100
+  view()
 }
 const goerliATokenAddress = '0x47195A03fC3Fc2881D084e8Dc03bD19BE8474E46'
 let mumbaiAToken
