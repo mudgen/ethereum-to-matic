@@ -21,6 +21,7 @@ const abi = [
   'function approve(address spender, uint256 amount) external returns (bool)',
   'function allowance(address owner, address spender) external view returns (uint256)',
   'function depositFor(address user, address rootToken, bytes calldata depositData) external',
+  'function withdraw(uint256 amount) external',
   'event Transfer(address indexed from, address indexed to, uint256 value)',
   'event Approval(address indexed owner, address indexed spender, uint256 value)'
 ]
@@ -30,11 +31,20 @@ const POSRootChainManager = '0xBbD7cBFA79faee899Eaf900F13C9065bF03B1A74'
 let provider
 let currentChainId
 let currentAccount
-let metaMaskContract
-const goerliApproved = false
+let withdrawalHash
+let withdrawalTime
+let withdrawalAmount
+let signer
+let metaMaskProvider
 
 // 0xBbD7cBFA79faee899Eaf900F13C9065bF03B1A74
 async function setValues () {
+  withdrawalHash = window.localStorage.getItem('withdrawalHash' + currentAccount)
+  withdrawalTime = window.localStorage.getItem('withdrawalTime' + currentAccount)
+  if (withdrawalTime) {
+    withdrawalTime = window.parseInt(withdrawalTime)
+  }
+  withdrawalAmount = window.localStorage.getItem('withdrawalAmount' + currentAccount)
   message = ''
   mumbaiATokenBalance = ethers.utils.formatEther(await mumbaiAToken.balanceOf(currentAccount))
   goerliATokenBalance = ethers.utils.formatEther(await goerliAToken.balanceOf(currentAccount))
@@ -54,42 +64,27 @@ async function eventUpdate (from, to, amount, event) {
 
 // For now, 'eth_accounts' will continue to always return an array
 async function handleAccountsChanged (accounts) {
+  currentChainId = window.ethereum.chainId
   if (accounts.length === 0) {
+    message = ''
     mumbaiATokenBalance = ''
     goerliATokenBalance = ''
     currentAccount = null
     opacity = 30
+    withdrawalHash = null
+    withdrawalTime = null
+    withdrawalAmount = null
     // MetaMask is locked or the user has not connected any accounts
     console.log('Please connect to MetaMask.')
   } else {
-    currentChainId = window.ethereum.chainId
     opacity = 100
     currentAccount = accounts[0]
     await setValues()
     // console.log(mumbaiATokenBalance)
     // console.log(goerliATokenBalance)
-    const metaMaskProvider = new ethers.providers.Web3Provider(window.ethereum)
-    const signer = metaMaskProvider.getSigner()
-    if (currentChainId === '0x5') {
-      goerliAToken = goerliAToken.connect(signer)
-      goerliPosERC20PredicateContract = goerliPosERC20PredicateContract.connect(signer)
-      goerliAToken.on('Approval', async (owner) => {
-        if (owner.toUpperCase() === currentAccount.toUpperCase()) {
-          await setValues()
-          view()
-        }
-      })
-      goerliPOSRootChainManagerContract = goerliPOSRootChainManagerContract.connect(signer)
-    } else if (currentChainId === '0x13881') {
-      mumbaiAToken = mumbaiAToken.connect(signer)
-    }
-    if (currentChainId === '0x5' || currentChainId === '0x13881') {
-      goerliAToken.on('Transfer', eventUpdate)
-      mumbaiAToken.on('Transfer', eventUpdate)
-    }
+    metaMaskProvider = new ethers.providers.Web3Provider(window.ethereum)
+    signer = metaMaskProvider.getSigner()
   }
-
-  console.log('testing')
 
   // Do any other work!
   // console.log(result)
@@ -99,29 +94,41 @@ async function handleAccountsChanged (accounts) {
 function handleChainChanged (_chainId) {
   console.log('reloading chain id')
   // We recommend reloading the page, unless you must do otherwise
-  // startup()
+  //
   currentChainId = window.ethereum.chainId
-  opacity = 100
-  view()
+  handleAccountsChanged([currentAccount])
+  // startup()
+  // opacity = 100
+  // view()
 }
 const goerliATokenAddress = '0x47195A03fC3Fc2881D084e8Dc03bD19BE8474E46'
 let mumbaiAToken
 let goerliAToken
 let mumbaiATokenBalance
 let goerliATokenBalance
-let goerliPosERC20PredicateContract
 let goerliPOSRootChainManagerContract
 let goerliAllowance = ethers.BigNumber.from('0')
 let opacity
 let message
+let subscribeEvents = false
+let mumbai
 // const goerliValue = ''
 async function startup () {
   const goerli = ethers.getDefaultProvider('goerli', { infura: '37b0df2bfa8d412580671665570d81dc' })
   goerliAToken = new ethers.Contract(goerliATokenAddress, abi, goerli)
-  const mumbai = new ethers.providers.JsonRpcProvider('https://rpc-mumbai.matic.today')
+  mumbai = new ethers.providers.JsonRpcProvider('https://rpc-mumbai.matic.today')
   mumbaiAToken = new ethers.Contract('0x201Df88D8d79ACA0AA6360F02eb9dD8aefdB1dfb', abi, mumbai)
-
-  goerliPosERC20PredicateContract = new ethers.Contract(posERC20Predicate, abi, goerli)
+  if (!subscribeEvents) {
+    goerliAToken.on('Transfer', eventUpdate)
+    mumbaiAToken.on('Transfer', eventUpdate)
+    goerliAToken.on('Approval', async (owner) => {
+      if (owner.toUpperCase() === currentAccount.toUpperCase()) {
+        await setValues()
+        view()
+      }
+    })
+  }
+  subscribeEvents = true
   goerliPOSRootChainManagerContract = new ethers.Contract(POSRootChainManager, abi, goerli)
 
   /*
@@ -148,9 +155,9 @@ async function startup () {
       .request({ method: 'eth_accounts' })
       .then(handleAccountsChanged)
       .catch((err) => {
-      // Some unexpected error.
-      // For backwards compatibility reasons, if no accounts are available,
-      // eth_accounts will return an empty array.
+        // Some unexpected error.
+        // For backwards compatibility reasons, if no accounts are available,
+        // eth_accounts will return an empty array.
         console.error(err)
       })
 
@@ -196,8 +203,10 @@ const connectToMetaMask = e => {
 }
 
 async function view () {
-  console.log('testingnow ')
   let header
+  if (message === 'Switch to Goerli network to claim your tokens.') {
+    message = ''
+  }
   if (!provider) {
 
   } else if (!currentAccount) {
@@ -206,6 +215,9 @@ async function view () {
     header = div.class`bg-green text-gray-100 rounded``Connected to Goerli Test Network`
   } else if (currentChainId === '0x13881') {
     header = div.class`bg-green text-gray-100 rounded``Connected to Matic Mumbai Test Network`
+    if (withdrawalTime && withdrawalTime < Date.now()) {
+      message = 'Switch to Goerli network to claim your tokens.'
+    }
   } else {
     header = div.class`bg-yellow text-black rounded-lg`(
       div.class`text-2xl mb-2``Please connect to Goerli or Matic Mumbai`,
@@ -225,14 +237,16 @@ async function view () {
         div.class`bg-blue-200 text-3xl``${goerliATokenBalance}`,
         div.class`mt-3`(
           makeButton(async (e) => {
-            await goerliAToken.mint()
+            const goerliATokenSigner = goerliAToken.connect(signer)
+            await goerliATokenSigner.mint()
             message = 'Minting ATokens.... Please wait.'
             view()
           }, 'Mint 25 AToken', currentChainId !== '0x5')
         ),
         div.class`mt-3`(
           makeButton(async (e) => {
-            await goerliAToken.approve(posERC20Predicate, ethers.utils.parseEther('1000000000000000000000000'))
+            const goerliATokenSigner = goerliAToken.connect(signer)
+            await goerliATokenSigner.approve(posERC20Predicate, ethers.utils.parseEther('1000000000000000000000000'))
             message = 'Approving ATokens.... Please wait.'
             view()
           }, 'AToken Approve', currentChainId !== '0x5' || goerliAllowance.gt(0))
@@ -247,7 +261,7 @@ async function view () {
               // .value(goerliValue)
               .placeholder`0.0`
           ),
-          div.class`mt-1 mb-10`(
+          div.class`mt-1`(
             makeButton(async (e) => {
               const value = document.getElementById('transfer-amount-to-mumbai').value
               // goerliValue = value
@@ -256,27 +270,88 @@ async function view () {
               }
               const tokenValue = ethers.utils.parseEther(value)
               const calldata = ethers.utils.defaultAbiCoder.encode(['uint'], [tokenValue])
+              const goerliPOSRootChainManagerContractSigner = goerliPOSRootChainManagerContract.connect(signer)
               // console.log(calldata)
-              await goerliPOSRootChainManagerContract.depositFor(currentAccount, goerliATokenAddress, calldata)
+              await goerliPOSRootChainManagerContractSigner.depositFor(currentAccount, goerliATokenAddress, calldata)
               // await goerliAToken.transfer('0xBbD7cBFA79faee899Eaf900F13C9065bF03B1A74', ethers.utils.parseEther(value))
               message = `Bridging ${value} ATokens to Mumbai. This could take a few minutes.`
               view()
             }, 'Bridge to Mumbai', currentChainId !== '0x5' || goerliAllowance.eq(0))
+          ),
+          div.class`mt-6`(
+            div.id`withdraw-time-left`
+              .class`text-center px-2 bg-indigo-100`(div())
+          ),
+          div.class`mb-8 mt-2`(
+            makeButton(async (e) => {
+              if (!withdrawalHash) {
+                console.log('withdrawalHash does not exist')
+              }
+              // console.log(window.Matic)
+              // console.log(mumbai)
+              // console.log(metaMaskProvider.getSigner())
+              const maticClient = new window.Matic.MaticPOSClient({
+                network: 'testnet',
+                version: 'mumbai',
+                maticProvider: 'https://rpc-mumbai.matic.today', // new ethers.providers.JsonRpcProvider('https://rpc-mumbai.matic.today'),
+                parentProvider: window.ethereum, // metaMaskProvider.getSigner(),
+                posRootChainManager: POSRootChainManager,
+                posERC20Predicate: posERC20Predicate,
+                parentDefaultOptions: { from: currentAccount },
+                maticDefaultOptions: { from: currentAccount }
+              })
+              message = 'Wait for metamask to come up to confirm the transaction to claim your ATokens.'
+              view()
+              await maticClient.exitERC20(withdrawalHash, { from: currentAccount })
+              window.localStorage.removeItem('withdrawalHash' + currentAccount)
+              window.localStorage.removeItem('withdrawalAmount' + currentAccount)
+              window.localStorage.removeItem('withdrawalTime' + currentAccount)
+              message = 'Claiming ATokens.... Please wait.'
+              view()
+            },
+              `Claim ${withdrawalAmount ? ethers.utils.formatEther(withdrawalAmount) : ''} ATokens`,
+              currentChainId !== '0x5' || (!withdrawalTime || withdrawalTime > Date.now()))
           )
-
-          // div.class`mt-1 flex rounded-md shadow-sm border`(
-          //   div.class`relative flex-grow focus-within:z-10 self-center items-center`(
-          //     div.class`inset-y-0 pl-1 flex pointer-events-none`(
-          //       input.id`aToken`
-          //         .class`form-input block w-30 rounded-none rounded-l-md -pr-15 transition ease-in-out duration-150`
-          //         .placeholder`0.0`),
-          //     button.class`ml-0 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm leading-5 font-medium rounded-r-md text-gray-700 bg-gray-50 hover:text-gray-500 hover:bg-white focus:outline-none focus:shadow-outline-blue focus:border-blue-300 active:bg-gray-100 active:text-gray-700 transition ease-in-out duration-150`(
-          //       span.class`ml-2``Sort`)))
         )
       ),
       div.class`flex-1 my-3 ml-2 border-4 text-center rounded`(
         span.class`text-2xl``Matic Mumbai AToken`,
-        div.class`bg-blue-200 text-3xl``${mumbaiATokenBalance}`
+        div.class`bg-blue-200 text-3xl``${mumbaiATokenBalance}`,
+        div.class`text-center`(
+          div.class`mt-3`(
+            input
+              .id`withdraw-amount-to-goerli`
+              .class`form-input border-3 w-25 text-center`
+              .type`number`
+              .step`0.1`
+              .placeholder`0.0`
+          ),
+          div.class`mt-1 mb-3`(
+            makeButton(async (e) => {
+              let value = document.getElementById('withdraw-amount-to-goerli').value
+              if (value <= 0) {
+                return
+              }
+              const valueDisplay = value
+              value = ethers.utils.parseEther(value)
+              const mumbaiATokenSigner = mumbaiAToken.connect(signer)
+              const txHash = (await mumbaiATokenSigner.withdraw(value)).hash
+              // const txHash = 'textHash'
+              window.localStorage.setItem('withdrawalHash' + currentAccount, txHash)
+              window.localStorage.setItem('withdrawalAmount' + currentAccount, value)
+              withdrawalTime = Date.now() + 1000 * 60 * 20
+              window.localStorage.setItem('withdrawalTime' + currentAccount, withdrawalTime)
+              withdrawalHash = txHash
+              withdrawalAmount = value
+              message = div(
+                div`Withdrawing ${valueDisplay} ATokens to Goerli.`,
+                div`This will take 20 minutes.`,
+                div`Switch your network to Goerli to claim your tokens after 20 minutes.`
+              )
+              view()
+            }, 'Withdraw to Goerli', currentChainId !== '0x13881' || withdrawalHash)
+          )
+        )
       )
     )
 
@@ -294,3 +369,26 @@ async function view () {
 }
 
 startup()
+window.setInterval(() => {
+  const timeDiv = document.getElementById('withdraw-time-left')
+  if (!timeDiv) {
+    return
+  }
+  if (!withdrawalTime || withdrawalTime < Date.now()) {
+    timeDiv.firstChild.replaceWith(div())
+    if (withdrawalTime) {
+      const diff = Date.now() - withdrawalTime
+      if (diff < 1000) {
+        view()
+        console.log('showing view')
+      }
+    }
+    return
+  }
+  const minutesLeft = Math.floor(((withdrawalTime - Date.now()) / 1000) / 60)
+  const secondsLeft = Math.floor(((withdrawalTime - Date.now()) / 1000) % 60)
+  timeDiv.firstChild.replaceWith(div(
+    div`Claim ${ethers.utils.formatEther(withdrawalAmount)} ATokens on Goerli in`,
+    div`${minutesLeft} minutes and ${secondsLeft} seconds.`
+  ))
+}, 500)
