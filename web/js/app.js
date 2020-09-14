@@ -121,7 +121,10 @@ async function startup () {
   if (!subscribeEvents) {
     goerliAToken.on('Transfer', eventUpdate)
     mumbaiAToken.on('Transfer', eventUpdate)
-    goerliAToken.on('Approval', async (owner) => {
+    goerliAToken.on('Approval', async (owner, spender, value) => {
+      console.log('approval event')
+      console.log(owner)
+      console.log(spender)
       if (owner.toUpperCase() === currentAccount.toUpperCase()) {
         await setValues()
         view()
